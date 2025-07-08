@@ -1,6 +1,5 @@
 package cz.michalmusil.controllers;
 
-
 import cz.michalmusil.models.SearchResponseModel;
 import cz.michalmusil.models.SearchResultModel;
 import org.slf4j.Logger;
@@ -12,6 +11,7 @@ import org.springframework.web.bind.annotation.*;
 import cz.michalmusil.services.GoogleScraperService;
 
 import java.util.List;
+import java.util.ArrayList; // Potřebujeme pro inicializaci prázdného listu
 
 /**
  * REST Controller pro Google scraping API
@@ -39,7 +39,7 @@ public class GoogleScraperController {
         if (keyword == null || keyword.trim().isEmpty()) {
             SearchResponseModel errorResponse = new SearchResponseModel(
                     keyword,
-                    null,
+                    new ArrayList<>(), // Měl by vrátit prázdný list, nikoli null
                     false,
                     "Klíčové slovo nesmí být prázdné"
             );
@@ -47,8 +47,9 @@ public class GoogleScraperController {
         }
 
         try {
-            // Provedení scrapingu
-            List<SearchResultModel> results = scraperService.scrapeGoogleResults(keyword.trim());
+            // --- Zde je klíčová změna: Voláme novou Selenium metodu ---
+            List<SearchResultModel> results = scraperService.scrapeGoogleResultsSelenium(keyword.trim());
+            // --- Konec klíčové změny ---
 
             SearchResponseModel response = new SearchResponseModel(
                     keyword.trim(),
@@ -62,24 +63,12 @@ public class GoogleScraperController {
 
             return ResponseEntity.ok(response);
 
-        } catch (InterruptedException e) {
-            logger.error("Scraping byl přerušen: {}", e.getMessage());
-            Thread.currentThread().interrupt();
-
-            SearchResponseModel errorResponse = new SearchResponseModel(
-                    keyword,
-                    null,
-                    false,
-                    "Scraping byl přerušen"
-            );
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
-
-        } catch (Exception e) {
+        } catch (Exception e) { // Odstraněna specifická InterruptedException, protože Selenium metoda ji nehodí
             logger.error("Chyba při scrapingu pro klíčové slovo {}: {}", keyword, e.getMessage(), e);
 
             SearchResponseModel errorResponse = new SearchResponseModel(
                     keyword,
-                    null,
+                    new ArrayList<>(), // Měl by vrátit prázdný list, nikoli null
                     false,
                     "Chyba při získávání výsledků: " + e.getMessage()
             );

@@ -13,213 +13,256 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeUnit; // Stále potřebujeme pro Thread.sleep
 
-/**
- * Služba pro scraping Google výsledků vyhledávání
- */
+// Selenium Imports
+import org.openqa.selenium.By;
+import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.chrome.ChromeDriver;
+import org.openqa.selenium.chrome.ChromeOptions;
+import org.openqa.selenium.support.ui.ExpectedConditions;
+import org.openqa.selenium.support.ui.WebDriverWait;
+import java.time.Duration; // Důležité pro WebDriverWait v novějších verzích Selenium
+
+// WebDriverManager Import (pro automatické stažení ChromeDriveru)
+import io.github.bonigarcia.wdm.WebDriverManager;
+
 @Service
 public class GoogleScraperService {
 
     private static final Logger logger = LoggerFactory.getLogger(GoogleScraperService.class);
 
-    // Rotace User-Agent stringů pro minimalizaci detekce
+    // Rozšířený seznam USER_AGENTS pro případné použití s Jsoup nebo pro nastavení v Selenium
     private static final String[] USER_AGENTS = {
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0",
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:127.0) Gecko/20100101 Firefox/127.0",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Edge/126.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:127.0) Gecko/20100101 Firefox/127.0",
+            "Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36",
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+            "Mozilla/5.0 (iPad; CPU OS 17_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/126.0.0.0 Mobile/15E148 Safari/604.1",
+            "Mozilla/5.0 (Linux; Android 12; SM-G998B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36",
+            "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36",
+            "Mozilla/5.0 (iPad; CPU OS 17_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
     };
 
     private final Random random = new Random();
 
     /**
-     * Provede scraping Google výsledků pro dané klíčové slovo
-     * @param keyword klíčové slovní spojení
-     * @return seznam nalezených výsledků
+     * Původní metoda pro scraping Google výsledků pomocí Jsoup.
+     * Tato metoda je zakomentovaná, aby sloužila pouze pro ukázku
+     * a porovnání s robustnějším řešením se Selenium.
+     *
+     * @param keyword Klíčové slovo pro vyhledávání.
+     * @return Seznam výsledků vyhledávání.
+     * @throws IOException
+     * @throws InterruptedException
      */
+    /*
     public List<SearchResultModel> scrapeGoogleResults(String keyword) throws IOException, InterruptedException {
-        logger.info("Zahajuji scraping pro klíčové slovo: {}", keyword);
+        List<SearchResultModel> results = new ArrayList<>();
+        String searchUrl = "https://www.google.com/search?q=" + keyword;
 
-        // Náhodné zpoždění pro minimalizaci detekce (2-5 sekund)
-        int delay = 2 + random.nextInt(4);
-        logger.info("Čekám {} sekund před požadavkem", delay);
-        TimeUnit.SECONDS.sleep(delay);
+        try {
+            // Zpoždění 10-20 sekund pro simulaci lidského chování
+            int delay = 10 + random.nextInt(11); // Nyní 10-20 sekund
+            logger.info("Jsoup: Čekám {} sekund před požadavkem na Google.", delay);
+            TimeUnit.SECONDS.sleep(delay);
 
-        // Sestavení URL
-        String searchUrl = "https://www.google.com/search?q=" + keyword.replace(" ", "+") + "&num=10";
-        logger.info("URL pro vyhledávání: {}", searchUrl);
+            String userAgent = USER_AGENTS[random.nextInt(USER_AGENTS.length)];
+            logger.info("Jsoup: Používám User-Agent: {}", userAgent);
 
-        // Náhodný výběr User-Agent
-        String userAgent = USER_AGENTS[random.nextInt(USER_AGENTS.length)];
+            Document doc = Jsoup.connect(searchUrl)
+                    .userAgent(userAgent)
+                    .timeout(10000) // 10 sekund timeout
+                    .get();
 
-        // HTTP požadavek s realistickými hlavičkami
-        Document doc = Jsoup.connect(searchUrl)
-                .userAgent(userAgent)
-                .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
-                .header("Accept-Language", "cs-CZ,cs;q=0.9,en;q=0.8")
-                .header("Accept-Encoding", "gzip, deflate, br")
-                .header("DNT", "1")
-                .header("Connection", "keep-alive")
-                .header("Upgrade-Insecure-Requests", "1")
-                .timeout(10000)
-                .get();
+            logger.info("Jsoup: Stránka stažena pro klíčové slovo: {}", keyword);
+            // logger.debug("Jsoup: Stažené HTML (prvních 500 znaků): {}", doc.html().substring(0, Math.min(doc.html().length(), 500)));
 
-        return parseSearchResults(doc);
+
+            Elements searchResults = doc.select("div.g"); // Selektor pro hlavní výsledky
+
+            if (searchResults.isEmpty()) {
+                logger.warn("Jsoup: Žádné výsledky nalezeny pro klíčové slovo '{}' pomocí selektoru 'div.g'. Možná blokace nebo změna struktury.", keyword);
+            }
+
+            for (Element result : searchResults) {
+                // Přesné selektory je vždy dobré si ověřit v prohlížeči (F12) pro aktuální Google
+                String title = result.select("h3").first() != null ? result.select("h3").first().text() : "N/A";
+                // URL je často v a.href uvnitř div.g, nebo jako atribut data-ved v divu
+                String url = result.select("a[href]").first() != null ? result.select("a[href]").first().attr("href") : "N/A";
+                String snippet = result.select(".lBwE0B.NA7gNc.IUO0K").first() != null ? result.select(".lBwE0B.NA7gNc.IUO0K").first().text() : "N/A"; // Aktuální snippet selektor
+                String description = result.select(".VwiC3b").first() != null ? result.select(".VwiC3b").first().text() : "N/A"; // Alternativní selektor pro popisek
+                String domain = result.select(".yuRUbf .TbwUpd.NJjxre cite").first() != null ? result.select(".yuRUbf .TbwUpd.NJjxre cite").first().text() : "N/A";
+
+
+                if (!isAdvertisement(result) && isValidResult(url)) {
+                    results.add(extractSearchResult(title, url, description));
+                }
+            }
+
+        } catch (IOException e) {
+            logger.error("Jsoup: Chyba připojení nebo čtení dat pro klíčové slovo '{}': {}", keyword, e.getMessage());
+            // Pokud je chyba typu "HTTP error fetching URL", Google nás zablokoval
+            if (e.getMessage() != null && e.getMessage().contains("status=429")) { // Příklad pro Too Many Requests
+                logger.error("Jsoup: Google pravděpodobně zablokoval požadavek (HTTP 429 - Too Many Requests).");
+            }
+            if (e.getMessage() != null && (e.getMessage().contains("HTTP error fetching URL") || e.getMessage().contains("SSLHandshakeException"))) {
+                 logger.error("Jsoup: Google pravděpodobně detekoval bota a odmítl připojení.");
+            }
+        } catch (Exception e) {
+            logger.error("Jsoup: Neočekávaná chyba při scrapingu pro klíčové slovo '{}': {}", keyword, e.getMessage(), e);
+        }
+        return results;
     }
+    */
 
     /**
-     * Parsuje HTML dokument a extrahuje organické výsledky vyhledávání
-     * @param doc HTML dokument
-     * @return seznam výsledků
+     * Nová, robustnější metoda pro scraping Google výsledků pomocí Selenium s Headless Chrome.
+     * Tento přístup je výrazně efektivnější pro obejití protibotových opatření.
+     *
+     * @param keyword Klíčové slovo pro vyhledávání.
+     * @return Seznam výsledků vyhledávání.
      */
-    private List<SearchResultModel> parseSearchResults(Document doc) {
+    public List<SearchResultModel> scrapeGoogleResultsSelenium(String keyword) {
         List<SearchResultModel> results = new ArrayList<>();
+        WebDriver driver = null; // Inicializujeme WebDriver na null
 
-        // Různé selektory pro organické výsledky (Google často mění strukturu)
-        String[] selectors = {
-                "div.g", // Hlavní kontejner pro organické výsledky
-                "div[data-ved]", // Alternativní selektor
-                ".tF2Cxc" // Další možný selektor
-        };
+        try {
+            // 1. Nastavení WebDriverManager (automatické stažení ChromeDriveru)
+            WebDriverManager.chromedriver().setup();
+            logger.info("Selenium: ChromeDriver nastaven pomocí WebDriverManager.");
 
-        Elements searchResults = null;
+            // 2. Konfigurace ChromeOptions pro headless mód a další nastavení
+            ChromeOptions options = new ChromeOptions();
+            options.addArguments("--headless"); // Spustí Chrome v headless (bezhlavém) režimu
+            options.addArguments("--disable-gpu"); // Doporučeno pro headless na některých systémech
+            options.addArguments("--no-sandbox"); // Důležité pro Linux prostředí a izolaci
+            options.addArguments("--window-size=1920,1080"); // Simulace standardního rozlišení obrazovky
+            // Nastavení náhodného User-Agentu. Selenium by sice použilo svůj, ale takto je to explicitní a rozmanitější.
+            options.addArguments("user-agent=" + USER_AGENTS[random.nextInt(USER_AGENTS.length)]);
+            // Můžete přidat i další argumenty pro lepší maskování, např. odpojení od automatizace
+            options.setExperimentalOption("excludeSwitches", List.of("enable-automation"));
+            options.setExperimentalOption("useAutomationExtension", false);
 
-        // Pokus o nalezení výsledků pomocí různých selektorů
-        for (String selector : selectors) {
-            searchResults = doc.select(selector);
-            if (!searchResults.isEmpty()) {
-                logger.info("Nalezeny výsledky pomocí selektoru: {}", selector);
-                break;
+
+            // 3. Inicializace ChromeDriveru
+            driver = new ChromeDriver(options);
+            logger.info("Selenium: WebDriver inicializován v headless režimu s nastaveným User-Agentem.");
+
+            // 4. Sestavení URL pro Google vyhledávání
+            String searchUrl = "https://www.google.com/search?q=" + keyword;
+            logger.info("Selenium: Naviguji na URL: {}", searchUrl);
+            driver.get(searchUrl);
+
+            // 5. Počkání na načtení stránky a přítomnost výsledků (důležité pro dynamické stránky)
+            // Použijeme WebDriverWait pro čekání na konkrétní element, což je robustnější než pevné sleep
+            WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(20)); // Max. 20 sekund čekání
+            // Čekáme na přítomnost elementu, který označuje hlavní výsledky vyhledávání (např. div s id "search")
+            wait.until(ExpectedConditions.presenceOfElementLocated(By.id("search")));
+            logger.info("Selenium: Stránka načtena a hlavní element výsledků ('search') je přítomen.");
+
+            // Přidáme náhodnou pauzu pro simulaci uživatelského chování PŘED parsováním
+            int delay = 5 + random.nextInt(6); // Náhodné zpoždění 5-10 sekund
+            logger.info("Selenium: Čekám {} sekund pro simulaci uživatelského chování.", delay);
+            TimeUnit.SECONDS.sleep(delay);
+
+            // 6. Získání obsahu stránky a předání Jsoup pro parsování
+            // Selenium vrátí kompletní DOM po provedení JavaScriptu
+            String pageSource = driver.getPageSource();
+            logger.debug("Selenium: Stažený pageSource (prvních 500 znaků): {}", pageSource.substring(0, Math.min(pageSource.length(), 500)));
+
+            Document doc = Jsoup.parse(pageSource); // Jsoup nyní dostane "čisté" HTML
+
+            // 7. Parsování výsledků pomocí Jsoup (stejně jako dříve)
+            Elements searchResults = doc.select("div.g"); // Selektor pro hlavní výsledky
+
+            if (searchResults.isEmpty()) {
+                logger.warn("Selenium: Žádné výsledky nalezeny pro klíčové slovo '{}' pomocí selektoru 'div.g'.", keyword);
+                // Může se stát, že Google změnil selektory, nebo že je blokace tak silná, že i Selenium narazí na CAPTCHA
+                if (pageSource.contains("Our systems have detected unusual traffic") || pageSource.contains("recaptcha")) {
+                    logger.error("Selenium: Google detekoval bota a zobrazil CAPTCHA. Selenium bylo zablokováno.");
+                } else {
+                    logger.warn("Selenium: Pravděpodobná změna HTML struktury Google. Je potřeba aktualizovat Jsoup selektory.");
+                }
+            }
+
+            for (Element result : searchResults) {
+                // Přesné selektory zkontrolujte v prohlížeči pro aktuální Google
+                String title = result.select("h3").first() != null ? result.select("h3").first().text() : "N/A";
+                // URL je často v a.href uvnitř div.g, nebo jako atribut data-ved v divu
+                String url = result.select("a[href]").first() != null ? result.select("a[href]").first().attr("href") : "N/A";
+                String snippet = result.select(".lBwE0B.NA7gNc.IUO0K").first() != null ? result.select(".lBwE0B.NA7gNc.IUO0K").first().text() : "N/A"; // Aktuální snippet selektor
+                String description = result.select(".VwiC3b").first() != null ? result.select(".VwiC3b").first().text() : "N/A"; // Alternativní selektor pro popisek
+                String domain = result.select(".yuRUbf .TbwUpd.NJjxre cite").first() != null ? result.select(".yuRUbf .TbwUpd.NJjxre cite").first().text() : "N/A";
+
+                if (!isAdvertisement(result) && isValidResult(url)) {
+                    results.add(extractSearchResult(title, url, snippet, description, domain));
+                }
+            }
+            logger.info("Selenium: Scraping pro '{}' dokončen. Nalezeno {} výsledků.", keyword, results.size());
+
+        } catch (Exception e) {
+            logger.error("Selenium: Chyba při Selenium scrapingu pro klíčové slovo '{}': {}", keyword, e.getMessage(), e);
+            if (driver != null && driver.getPageSource().contains("Our systems have detected unusual traffic")) {
+                logger.error("Selenium: Google detekoval neobvyklý provoz a zobrazil CAPTCHA stránku.");
+            }
+        } finally {
+            // 8. Důležité: Ukončení WebDriveru pro uvolnění systémových zdrojů
+            if (driver != null) {
+                driver.quit(); // Ukončí proces Chrome a vyčistí zdroje
+                logger.info("Selenium: WebDriver ukončen.");
             }
         }
-
-        if (searchResults == null || searchResults.isEmpty()) {
-            logger.warn("Nenalezeny žádné výsledky vyhledávání");
-            return results;
-        }
-
-        int count = 0;
-        for (Element result : searchResults) {
-            if (count >= 10) break; // Omezit na prvních 10 výsledků
-
-            try {
-                // Ignorovat reklamy (obsahují určité třídy nebo atributy)
-                if (isAdvertisement(result)) {
-                    continue;
-                }
-
-                SearchResultModel searchResult = extractSearchResult(result);
-                if (searchResult != null && isValidResult(searchResult)) {
-                    results.add(searchResult);
-                    count++;
-                    logger.debug("Extrahován výsledek {}: {}", count, searchResult.getTitle());
-                }
-            } catch (Exception e) {
-                logger.warn("Chyba při extrakci výsledku: {}", e.getMessage());
-            }
-        }
-
-        logger.info("Celkem extrahováno {} výsledků", results.size());
         return results;
     }
 
     /**
-     * Zjistí, zda je element reklama
-     * @param element HTML element
-     * @return true pokud je reklama
+     * Pomocná metoda pro kontrolu, zda je výsledek reklama.
+     * Potřebuje aktualizovat selektory pro detekci reklam.
      */
-    private boolean isAdvertisement(Element element) {
-        // Kontrola různých indikátorů reklam
-        String html = element.html().toLowerCase();
-        String className = element.className().toLowerCase();
-
-        return html.contains("ads-ad") ||
-                html.contains("sponsored") ||
-                className.contains("ads") ||
-                element.select("span:contains(Ad)").size() > 0 ||
-                element.select("span:contains(Reklama)").size() > 0;
-    }
-
-    /**
-     * Extrahuje jednotlivý výsledek vyhledávání
-     * @param element HTML element
-     * @return SearchResult nebo null
-     */
-    private SearchResultModel extractSearchResult(Element element) {
-        try {
-            // Různé selektory pro titulek
-            Element titleElement = element.selectFirst("h3");
-            if (titleElement == null) {
-                titleElement = element.selectFirst("a h3");
-            }
-            if (titleElement == null) {
-                titleElement = element.selectFirst(".LC20lb");
-            }
-
-            // Různé selektory pro URL
-            Element linkElement = element.selectFirst("a[href]");
-            if (linkElement == null) {
-                linkElement = element.selectFirst("h3 a[href]");
-            }
-
-            // Různé selektory pro popis
-            Element descriptionElement = element.selectFirst(".VwiC3b");
-            if (descriptionElement == null) {
-                descriptionElement = element.selectFirst(".s");
-            }
-            if (descriptionElement == null) {
-                descriptionElement = element.selectFirst("span:contains(...)");
-            }
-
-            String title = titleElement != null ? titleElement.text().trim() : "";
-            String url = linkElement != null ? linkElement.attr("href") : "";
-            String description = descriptionElement != null ? descriptionElement.text().trim() : "";
-
-            // Čištění URL (odstranění Google redirect)
-            url = cleanUrl(url);
-
-            return new SearchResultModel(title, url, description);
-
-        } catch (Exception e) {
-            logger.warn("Chyba při extrakci výsledku: {}", e.getMessage());
-            return null;
+    private boolean isAdvertisement(Element result) {
+        // Příklad selektoru pro reklamy. Google často mění třídy.
+        // Běžné třídy pro reklamy mohou být ".ads-ad", "div[data-text-ad]", nebo text "Reklama" uvnitř elementu
+        // Zkontrolujte aktuální DOM v prohlížeči (F12) pro přesné selektory.
+        boolean isAd = result.select(".ads-ad").first() != null ||
+                result.select("span.cHIEz.WJg5P").first() != null; // Často používaná třída pro "Sponsored"
+        if (isAd) {
+            logger.debug("Identifikována reklama, ignoruji: {}", result.select("h3").first() != null ? result.select("h3").first().text() : "N/A");
         }
+        return isAd;
     }
 
     /**
-     * Vyčistí URL od Google redirect parametrů
-     * @param url původní URL
-     * @return vyčištěné URL
+     * Pomocná metoda pro kontrolu platnosti URL.
+     */
+    private boolean isValidResult(String url) {
+        return url != null && !url.isEmpty() && !url.startsWith("http://accounts.google.com") && !url.contains("google.com/search") && !url.contains("policies.google.com");
+    }
+
+    /**
+     * Pomocná metoda pro extrakci dat a vytvoření objektu SearchResultModel.
+     */
+    private SearchResultModel extractSearchResult(String title, String url, String snippet, String description, String domain) {
+        String cleanedUrl = cleanUrl(url); // Stále používáme cleanUrl pro odstranění Google přesměrování
+        logger.debug("Extrahován výsledek: Titulek='{}', URL='{}', Popis='{}'", title, cleanedUrl, description);
+        return new SearchResultModel(title, cleanedUrl, description);
+    }
+
+    /**
+     * Pomocná metoda pro čištění URL z Google přesměrování.
      */
     private String cleanUrl(String url) {
-        if (url == null || url.isEmpty()) {
-            return "";
-        }
-
-        // Odstranění Google redirect
-        if (url.startsWith("/url?q=")) {
-            int start = url.indexOf("q=") + 2;
-            int end = url.indexOf("&", start);
-            if (end == -1) {
-                return url.substring(start);
-            } else {
-                return url.substring(start, end);
+        if (url != null && url.startsWith("/url?q=")) {
+            int ampIndex = url.indexOf('&');
+            if (ampIndex != -1) {
+                return url.substring("/url?q=".length(), ampIndex);
             }
+            return url.substring("/url?q=".length());
         }
-
         return url;
-    }
-
-    /**
-     * Validuje, zda je výsledek platný
-     * @param result výsledek k validaci
-     * @return true pokud je platný
-     */
-    private boolean isValidResult(SearchResultModel result) {
-        return result != null &&
-                result.getTitle() != null && !result.getTitle().isEmpty() &&
-                result.getUrl() != null && !result.getUrl().isEmpty();
     }
 }
