@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Google Scraper</title>
+    <style>
+        /* Your CSS styles go here, exactly as you provided them */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            padding: 40px;
+            width: 100%;
+            max-width: 800px;
+            animation: fadeIn 0.5s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            font-weight: 300;
+        }
+        .search-form {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .input-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        #keywordInput {
+            flex: 1;
+            padding: 15px 20px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            min-width: 250px;
+        }
+        #keywordInput:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        #searchBtn {
+            padding: 15px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+            min-width: 120px;
+        }
+        #searchBtn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+        #searchBtn:active {
+            transform: translateY(0);
+        }
+        #searchBtn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .status {
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 10px;
+            font-weight: 500;
+            text-align: center;
+            opacity: 0;
+            transform: translateY(10px);
+            transition: all 0.3s ease;
+        }
+        .status.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .status.loading {
+            background: #e3f2fd;
+            color: #1565c0;
+            border: 1px solid #bbdefb;
+        }
+        .status.success {
+            background: #e8f5e8;
+            color: #2e7d32;
+            border: 1px solid #c8e6c9;
+        }
+        .status.error {
+            background: #ffebee;
+            color: #c62828;
+            border: 1px solid #ffcdd2;
+        }
+        .results-section {
+            margin-top: 30px;
+        }
+        .results-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .results-count {
+            font-size: 18px;
+            color: #666;
+            font-weight: 500;
+        }
+        .download-btn {
+            padding: 10px 20px;
+            background: #4caf50;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .download-btn:hover {
+            background: #45a049;
+            transform: translateY(-1px);
+        }
+        .results-list {
+            display: none;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.5s ease;
+        }
+        .results-list.show {
+            display: block;
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .result-item {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 15px;
+            transition: all 0.3s ease;
+            animation: slideIn 0.3s ease forwards;
+            opacity: 0;
+            transform: translateX(-20px);
+        }
+        .result-item:hover {
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            transform: translateY(-2px);
+        }
+        @keyframes slideIn {
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        .result-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1a73e8;
+            margin-bottom: 8px;
+            word-break: break-word;
+        }
+        .result-url {
+            font-size: 14px;
+            color: #5f6368;
+            margin-bottom: 8px;
+            word-break: break-all;
+        }
+        .result-description {
+            font-size: 14px;
+            color: #3c4043;
+            line-height: 1.4;
+        }
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .hidden {
+            display: none;
+        }
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+                margin: 10px;
+            }
+                        h1 {
+                font-size: 2em;
+            }
+                        .input-group {
+                flex-direction: column;
+            }
+                        #keywordInput {
+                min-width: auto;
+            }
+                        .results-header {
+                flex-direction: column;
+                align-items: stretch;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>🔍 Google Scraper</h1>
+
+    <form class="search-form" id="searchForm">
+        <div class="input-group">
+            <input
+                    type="text"
+                    id="keywordInput"
+                    placeholder="Zadejte klíčové slovní spojení..."
+                    required
+                    autocomplete="off"
+            >
+            <button type="submit" id="searchBtn">
+                <span class="btn-text">Vyhledat</span>
+                <span class="loading-spinner hidden"></span>
+            </button>
+        </div>
+    </form>
+
+    <div id="status" class="status"></div>
+
+    <div class="results-section hidden" id="resultsSection">
+        <div class="results-header">
+            <div class="results-count" id="resultsCount"></div>
+            <button class="download-btn" id="downloadBtn">
+                📥 Stáhnout JSON
+            </button>
+        </div>
+        <div class="results-list" id="resultsList"></div>
+    </div>
+</div>
+
+<script>
+    // Konfigurace API
+    // Toto je adresa vašeho Spring Boot backendu
+    const API_BASE_URL = 'http://localhost:8080';
+    const SCRAPE_ENDPOINT = '/api/scrape';
+
+    // DOM elementy
+    const searchForm = document.getElementById('searchForm');
+    const keywordInput = document.getElementById('keywordInput');
+    const searchBtn = document.getElementById('searchBtn');
+    const statusDiv = document.getElementById('status');
+    const resultsSection = document.getElementById('resultsSection');
+    const resultsCount = document.getElementById('resultsCount');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const resultsList = document.getElementById('resultsList');
+    const btnText = document.querySelector('.btn-text');
+    const loadingSpinner = document.querySelector('.loading-spinner');
+
+    // Globální proměnné
+    let currentResults = null;
+    let currentKeyword = '';
+
+    // Event listener pro formulář
+    searchForm.addEventListener('submit', handleFormSubmit);
+    downloadBtn.addEventListener('click', handleDownload);
+
+    /**
+     * Zpracování odeslání formuláře
+     */
+    async function handleFormSubmit(event) {
+        event.preventDefault();
+
+        const keyword = keywordInput.value.trim();
+        if (!keyword) {
+            showStatus('Zadejte klíčové slovní spojení', 'error');
+            return;
+        }
+        currentKeyword = keyword;
+        setLoadingState(true);
+        hideResults();
+
+        try {
+            const response = await fetchSearchResults(keyword);
+            handleSearchResponse(response);
+        } catch (error) {
+            console.error('Chyba při vyhledávání:', error);
+            showStatus('Chyba při komunikaci se serverem: ' + error.message, 'error');
+        } finally {
+            setLoadingState(false);
+        }
+    }
+
+    /**
+     * Volání API pro scraping
+     */
+    async function fetchSearchResults(keyword) {
+        const url = `${API_BASE_URL}${SCRAPE_ENDPOINT}?keyword=${encodeURIComponent(keyword)}`;
+        console.log("Volám API na URL:", url); // Pro debug
+
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json' // Důležité pro Spring - říkáme, že očekáváme JSON
+            },
+        });
+
+        // Kontrola HTTP statusu před parsováním JSONu
+        if (!response.ok) {
+            const errorBody = await response.json().catch(() => ({ message: response.statusText }));
+            throw new Error(`HTTP ${response.status}: ${errorBody.message || response.statusText}`);
+        }
+        return await response.json();
+    }
+
+    /**
+     * Zpracování odpovědi z API
+     */
+    function handleSearchResponse(response) {
+        // Kontrolujeme 'success' flag z backendu
+        if (response.success) {
+            currentResults = response;
+            showResults(response.results);
+            showStatus(`Úspěšně nalezeno ${response.results.length} výsledků`, 'success');
+        } else {
+            // Zobrazíme chybovou zprávu z backendu
+            showStatus('Chyba: ' + response.message, 'error');
+            currentResults = null; // Vymažeme předchozí výsledky
+        }
+    }
+
+    /**
+     * Zobrazení výsledků
+     */
+    function showResults(results) {
+        resultsCount.textContent = `Nalezeno ${results.length} výsledků`;
+        resultsList.innerHTML = '';
+        if (results.length === 0) {
+            resultsList.innerHTML = '<p style="text-align: center; color: #666; font-style: italic;">Žádné výsledky nenalezeny</p>';
+        } else {
+            results.forEach((result, index) => {
+                const resultElement = createResultElement(result, index);
+                resultsList.appendChild(resultElement);
+            });
+        }
+        resultsSection.classList.remove('hidden');
+        setTimeout(() => {
+            resultsList.classList.add('show');
+        }, 100);
+    }
+
+    /**
+     * Vytvoření elementu pro jednotlivý výsledek
+     */
+    function createResultElement(result, index) {
+        const resultDiv = document.createElement('div');
+        resultDiv.className = 'result-item';
+        resultDiv.style.animationDelay = `${index * 0.1}s`;
+        // Zajištění, že se titul, URL a popis zobrazí, i když chybí
+        const title = escapeHtml(result.title || 'Bez titulku');
+        const url = escapeHtml(result.url || '#');
+        const description = escapeHtml(result.description || 'Bez popisu');
+
+        resultDiv.innerHTML = `
+            <div class="result-title">${title}</div>
+            <div class="result-url">${url}</div>
+            <div class="result-description">${description}</div>
+        `;
+        return resultDiv;
+    }
+
+    /**
+     * Stažení JSON souboru
+     */
+    function handleDownload() {
+        if (!currentResults) {
+            showStatus('Nejsou k dispozici žádná data ke stažení', 'error');
+            return;
+        }
+        try {
+            // Používáme currentResults, které obsahuje kompletní objekt s keyword, results, success, message a timestamp
+            const jsonData = JSON.stringify(currentResults, null, 2);
+            const blob = new Blob([jsonData], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+
+            // Název souboru s očištěným klíčovým slovem a aktuálním datem
+            const fileName = `google_results_${sanitizeFileName(currentKeyword)}_${new Date().toISOString().split('T')[0]}.json`;
+
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+
+            URL.revokeObjectURL(url); // Uvolnění URL objektu z paměti
+
+            showStatus('Soubor byl úspěšně stažen', 'success');
+        } catch (error) {
+            console.error('Chyba při stahování:', error);
+            showStatus('Chyba při generování souboru', 'error');
+        }
+    }
+
+    /**
+     * Nastavení loading stavu tlačítka a spinneru
+     */
+    function setLoadingState(isLoading) {
+        searchBtn.disabled = isLoading;
+
+        if (isLoading) {
+            btnText.textContent = 'Vyhledávám...';
+            loadingSpinner.classList.remove('hidden');
+            showStatus('Načítám výsledky z Google...', 'loading');
+        } else {
+            btnText.textContent = 'Vyhledat';
+            loadingSpinner.classList.add('hidden');
+        }
+    }
+
+    /**
+     * Zobrazení statusové zprávy
+     */
+    function showStatus(message, type) {
+        statusDiv.textContent = message;
+        statusDiv.className = `status ${type}`; // Nastaví třídu (loading, success, error)
+        statusDiv.classList.add('show'); // Zviditelní element
+
+        // Pro úspěšné zprávy automatické skrytí po 3 sekundách
+        if (type === 'success') {
+            setTimeout(() => {
+                statusDiv.classList.remove('show');
+            }, 3000);
+        }
+    }
+
+    /**
+     * Skrytí sekce výsledků
+     */
+    function hideResults() {
+        resultsSection.classList.add('hidden');
+        resultsList.classList.remove('show');
+    }
+
+    /**
+     * Escape HTML speciálních znaků, aby se zabránilo XSS
+     */
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    /**
+     * Sanitizace názvu souboru pro bezpečné stahování
+     */
+    function sanitizeFileName(filename) {
+        return filename.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    }
+
+    // Inicializace aplikace po načtení DOM
+    document.addEventListener('DOMContentLoaded', function() {
+        keywordInput.focus(); // Zaměření na vstupní pole
+        console.log('Google Scraper frontend inicializován a připraven.');
+    });
+</script>
+</body>
+</html>

@@ -1,6 +1,6 @@
-package services;
+package cz.michalmusil.services;
 
-import models.SearchResultModel;
+import cz.michalmusil.models.SearchResultModel;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
