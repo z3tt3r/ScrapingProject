@@ -23,6 +23,7 @@ import org.openqa.selenium.chrome.ChromeOptions;
 import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.openqa.selenium.support.ui.WebDriverWait;
 import java.time.Duration; // Důležité pro WebDriverWait v novějších verzích Selenium
+import org.openqa.selenium.TimeoutException;
 
 // WebDriverManager Import (pro automatické stažení ChromeDriveru)
 import io.github.bonigarcia.wdm.WebDriverManager;
@@ -142,12 +143,16 @@ public class GoogleScraperService {
             options.addArguments("--disable-gpu"); // Doporučeno pro headless na některých systémech
             options.addArguments("--no-sandbox"); // Důležité pro Linux prostředí a izolaci
             options.addArguments("--window-size=1920,1080"); // Simulace standardního rozlišení obrazovky
+            // --- Vylepšené maskování Selenium ---
+            options.setExperimentalOption("excludeSwitches", List.of("enable-automation", "load-extension"));
+            options.setExperimentalOption("useAutomationExtension", false);
+            options.addArguments("--disable-blink-features=AutomationControlled");
+            options.addArguments("--incognito"); // Použít anonymní režim pro čistší session
             // Nastavení náhodného User-Agentu. Selenium by sice použilo svůj, ale takto je to explicitní a rozmanitější.
             options.addArguments("user-agent=" + USER_AGENTS[random.nextInt(USER_AGENTS.length)]);
             // Můžete přidat i další argumenty pro lepší maskování, např. odpojení od automatizace
             options.setExperimentalOption("excludeSwitches", List.of("enable-automation"));
             options.setExperimentalOption("useAutomationExtension", false);
-
 
             // 3. Inicializace ChromeDriveru
             driver = new ChromeDriver(options);
@@ -160,15 +165,38 @@ public class GoogleScraperService {
 
             // 5. Počkání na načtení stránky a přítomnost výsledků (důležité pro dynamické stránky)
             // Použijeme WebDriverWait pro čekání na konkrétní element, což je robustnější než pevné sleep
-            WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(20)); // Max. 20 sekund čekání
-            // Čekáme na přítomnost elementu, který označuje hlavní výsledky vyhledávání (např. div s id "search")
-            wait.until(ExpectedConditions.presenceOfElementLocated(By.id("search")));
-            logger.info("Selenium: Stránka načtena a hlavní element výsledků ('search') je přítomen.");
+            WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(45)); // Max. 20 sekund čekání
+            // Rozšířená detekce CAPTCHA / prázdných výsledků
+            try {
+                // Snažíme se počkat na hlavní element s výsledky vyhledávání
+                wait.until(ExpectedConditions.presenceOfElementLocated(By.id("search")));
+                logger.info("Selenium: Stránka načtena, hlavní element výsledků ('search') je přítomen.");
 
-            // Přidáme náhodnou pauzu pro simulaci uživatelského chování PŘED parsováním
-            int delay = 5 + random.nextInt(6); // Náhodné zpoždění 5-10 sekund
-            logger.info("Selenium: Čekám {} sekund pro simulaci uživatelského chování.", delay);
-            TimeUnit.SECONDS.sleep(delay);
+                // Přidáme delší náhodnou pauzu pro simulaci uživatelského chování PŘED parsováním
+                int delay = 10 + random.nextInt(11); // Náhodné zpoždění 10-20 sekund
+                logger.info("Selenium: Čekám {} sekund pro simulaci uživatelského chování.", delay);
+                TimeUnit.SECONDS.sleep(delay);
+
+            } catch (TimeoutException e) {
+                logger.warn("Selenium: Element 'search' nebyl nalezen v časovém limitu ({}s). Pravděpodobná blokace.", 45);
+                String pageSource = driver.getPageSource(); // Získejte zdroj pro diagnostiku
+
+                // Zkontrolujeme typické indikátory CAPTCHA nebo blokace
+                if (pageSource.contains("Our systems have detected unusual traffic") ||
+                        pageSource.contains("recaptcha") ||
+                        pageSource.contains("reCAPTCHA_enterprise")) {
+                    logger.error("Selenium: Google detekoval bota a zobrazil CAPTCHA stránku. Scraping nelze provést.");
+                    return new ArrayList<>(); // Vracíme prázdný seznam, protože došlo k blokaci
+                } else if (pageSource.contains("did not match any documents")) {
+                    logger.warn("Selenium: Google vrátil stránku 'No results found'. Možná neplatné klíčové slovo nebo jiný problém.");
+                    return new ArrayList<>();
+                }
+                else {
+                    logger.error("Selenium: Neočekávaná struktura stránky nebo jiná neznámá blokace. Nelze nalézt výsledky.");
+                    // Můžeme se rozhodnout buď vrátit prázdný list, nebo re-throw chybu pro kontroler
+                    return new ArrayList<>();
+                }
+            }
 
             // 6. Získání obsahu stránky a předání Jsoup pro parsování
             // Selenium vrátí kompletní DOM po provedení JavaScriptu

@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.*;
 import cz.michalmusil.services.GoogleScraperService;
 
 import java.util.List;
-import java.util.ArrayList; // Potřebujeme pro inicializaci prázdného listu
+import java.util.ArrayList;
 
 /**
  * REST Controller pro Google scraping API
